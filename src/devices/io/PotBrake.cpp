@@ -65,9 +65,6 @@ void PotBrake::setup() {
     entry = {"BMAXR", "Percent of full torque for maximum brake regen", &config->maximumRegen, CFG_ENTRY_VAR_TYPE::BYTE, 0, 100, 0, nullptr};
     cfgEntries.push_back(entry);
 
-    //set digital ports to inputs and pull them up all inputs currently active low
-    //pinMode(THROTTLE_INPUT_BRAKELIGHT, INPUT_PULLUP); //Brake light switch
-
     loadConfiguration();
     tickHandler.attach(this, CFG_TICK_INTERVAL_POT_THROTTLE);
 }
@@ -95,12 +92,14 @@ RawSignalData *PotBrake::acquireRawSignal() {
 bool PotBrake::validateSignal(RawSignalData *rawSignal) {
     PotBrakeConfiguration *config = (PotBrakeConfiguration *) getConfiguration();
 
+    //if the signal being read is greater than our tolerance defined in Throttle.h (15.0%), throw an error
     if (rawSignal->input1 > (config->maximumLevel1 + CFG_THROTTLE_TOLERANCE)) {
         if (status == OK)
             Logger::error(POTBRAKEPEDAL, (char *)Constants::valueOutOfRange, rawSignal->input1);
         status = ERR_HIGH_T1;
         return true; // even if it's too high, let it process and apply full regen !
     }
+    //if the signal being read is less than our tolerance defined in Throttle.h (15.0%), throw an error
     if (rawSignal->input1 < (config->minimumLevel1 - CFG_THROTTLE_TOLERANCE)) {
         if (status == OK)
             Logger::error(POTBRAKEPEDAL, (char *)Constants::valueOutOfRange, rawSignal->input1);
@@ -123,9 +122,8 @@ int16_t PotBrake::calculatePedalPosition(RawSignalData *rawSignal) {
     PotBrakeConfiguration *config = (PotBrakeConfiguration *) getConfiguration();
     uint16_t calcBrake1, clampedLevel;
 
-    if (config->maximumLevel1 == 0) //brake processing disabled if max is 0
-        return 0;
-
+    //first make sure it is between the minimum and maximum level because value could be below minimum or above maximum because of our tolerance 
+    //when performoning the sanity check on the readings
     clampedLevel = constrain(rawSignal->input1, config->minimumLevel1, config->maximumLevel1);
     calcBrake1 = map(clampedLevel, config->minimumLevel1, config->maximumLevel1, (uint16_t) 0, (uint16_t) 1000);
 
@@ -177,17 +175,15 @@ DeviceType PotBrake::getType() {
 void PotBrake::loadConfiguration() {
     PotBrakeConfiguration *config = new PotBrakeConfiguration();
     setConfiguration(config);
-
-    // we deliberately do not load config via parent class here !
-
-    //if (prefsHandler->checksumValid()) { //checksum is good, read in the values stored in EEPROM
-        prefsHandler->read("BrakeMin", (uint16_t *)&config->minimumLevel1, 100);
-        prefsHandler->read("BrakeMax", (uint16_t *)&config->maximumLevel1, 3200);
-        prefsHandler->read("BrakeMaxRegen", &config->maximumRegen, 50);
-        prefsHandler->read("BrakeMinRegen", &config->minimumRegen, 0);
-        prefsHandler->read("BrakeADC", &config->AdcPin1, 2);
-        Logger::debug(POTBRAKEPEDAL, "BRAKE MIN: %i MAX: %i", config->minimumLevel1, config->maximumLevel1);
-        Logger::debug(POTBRAKEPEDAL, "Min: %i MaxRegen: %i", config->minimumRegen, config->maximumRegen);
+    //this is where we need to manually input our calibrated pedal, right now it is based on manual
+    prefsHandler->read("BrakeMin", (uint16_t *)&config->minimumLevel1, 409);
+    prefsHandler->read("BrakeMax", (uint16_t *)&config->maximumLevel1, 3681);
+    prefsHandler->read("BrakeMaxRegen", &config->maximumRegen, 50);
+    prefsHandler->read("BrakeMinRegen", &config->minimumRegen, 0);
+    //Need to figure out which pin to put brake to, might need to find a pin that can read and then just test numbers because the number input does not necessarily correspond to the pin number
+    prefsHandler->read("BrakeADC", &config->AdcPin1, 2);
+    Logger::debug(POTBRAKEPEDAL, "BRAKE MIN: %i MAX: %i", config->minimumLevel1, config->maximumLevel1);
+    Logger::debug(POTBRAKEPEDAL, "Min: %i MaxRegen: %i", config->minimumRegen, config->maximumRegen);
 }
 
 /*
