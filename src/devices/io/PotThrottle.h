@@ -73,6 +73,7 @@ public:
 protected:
     bool validateSignal(RawSignalData *);
     int16_t calculatePedalPosition(RawSignalData *);
+    String describeThrottleType();
 
 
 private:
