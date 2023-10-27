@@ -258,6 +258,14 @@ void PotThrottle::loadConfiguration() {
     Logger::debug(POTACCELPEDAL, "T1 MIN: %i MAX: %i      T2 MIN: %i MAX: %i", config->minimumLevel1, config->maximumLevel1, config->minimumLevel2,
                   config->maximumLevel2);
 }
+
+String PotThrottle::describeThrottleType()
+{
+    PotThrottleConfiguration *config = (PotThrottleConfiguration *) getConfiguration();
+    if (config->throttleSubType == 1) return String("Std Linear");
+    if (config->throttleSubType == 2) return String("Inverse Linear");
+    return String("Invalid Value!");
+}
 //creation of a global variable here causes the driver to automatically register itself without external help
 PotThrottle potThrottle;
 
