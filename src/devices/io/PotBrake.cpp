@@ -60,10 +60,11 @@ void PotBrake::setup() {
     cfgEntries.push_back(entry);
     entry = {"B1MX", "Set brake max value", &config->maximumLevel1, CFG_ENTRY_VAR_TYPE::UINT16, 0, 4096, 0, nullptr};
     cfgEntries.push_back(entry);
-    entry = {"BMINR", "Percent of full torque for start of brake regen", &config->minimumRegen, CFG_ENTRY_VAR_TYPE::BYTE, 0, 100, 0, nullptr};
-    cfgEntries.push_back(entry);
-    entry = {"BMAXR", "Percent of full torque for maximum brake regen", &config->maximumRegen, CFG_ENTRY_VAR_TYPE::BYTE, 0, 100, 0, nullptr};
-    cfgEntries.push_back(entry);
+    //our break does not have regenerative breaking
+    // entry = {"BMINR", "Percent of full torque for start of brake regen", &config->minimumRegen, CFG_ENTRY_VAR_TYPE::BYTE, 0, 100, 0, nullptr};
+    // cfgEntries.push_back(entry);
+    // entry = {"BMAXR", "Percent of full torque for maximum brake regen", &config->maximumRegen, CFG_ENTRY_VAR_TYPE::BYTE, 0, 100, 0, nullptr};
+    // cfgEntries.push_back(entry);
 
     loadConfiguration();
     tickHandler.attach(this, CFG_TICK_INTERVAL_POT_THROTTLE);
@@ -141,14 +142,15 @@ int16_t PotBrake::calculatePedalPosition(RawSignalData *rawSignal) {
  * Overrides the standard implementation of throttle mapping as different rules apply to
  * brake based regen.
  */
+//I AM NOT SURE ABOUT THIS CODE BECAUSE WE DO NOT HAVE REGENERATIVE BREAKING
 int16_t PotBrake::mapPedalPosition(int16_t pedalPosition) {
-    ThrottleConfiguration *config = (ThrottleConfiguration *) getConfiguration();
-    int16_t brakeLevel, range;
+    // ThrottleConfiguration *config = (ThrottleConfiguration *) getConfiguration();
+    // int16_t brakeLevel, range;
 
-    range = config->maximumRegen - config->minimumRegen;
-    brakeLevel = -10 * range * pedalPosition / 1000;
-    brakeLevel -= 10 * config->minimumRegen;
-    Logger::avalanche(POTBRAKEPEDAL, "level: %d", brakeLevel);
+    // range = config->maximumRegen - config->minimumRegen;
+    // brakeLevel = -10 * range * pedalPosition / 1000;
+    // brakeLevel -= 10 * config->minimumRegen;
+    // Logger::avalanche(POTBRAKEPEDAL, "level: %d", brakeLevel);
 
     return brakeLevel;
 }
@@ -178,28 +180,28 @@ void PotBrake::loadConfiguration() {
     //this is where we need to manually input our calibrated pedal, right now it is based on manual
     prefsHandler->read("BrakeMin", (uint16_t *)&config->minimumLevel1, 409);
     prefsHandler->read("BrakeMax", (uint16_t *)&config->maximumLevel1, 3681);
-    prefsHandler->read("BrakeMaxRegen", &config->maximumRegen, 50);
-    prefsHandler->read("BrakeMinRegen", &config->minimumRegen, 0);
+    // prefsHandler->read("BrakeMaxRegen", &config->maximumRegen, 50);
+    // prefsHandler->read("BrakeMinRegen", &config->minimumRegen, 0);
     //Need to figure out which pin to put brake to, might need to find a pin that can read and then just test numbers because the number input does not necessarily correspond to the pin number
     prefsHandler->read("BrakeADC", &config->AdcPin1, 2);
     Logger::debug(POTBRAKEPEDAL, "BRAKE MIN: %i MAX: %i", config->minimumLevel1, config->maximumLevel1);
-    Logger::debug(POTBRAKEPEDAL, "Min: %i MaxRegen: %i", config->minimumRegen, config->maximumRegen);
+    //Logger::debug(POTBRAKEPEDAL, "Min: %i MaxRegen: %i", config->minimumRegen, config->maximumRegen);
 }
 
 /*
  * Store the current configuration to EEPROM
  */
-void PotBrake::saveConfiguration() {
-    PotBrakeConfiguration *config = (PotBrakeConfiguration *) getConfiguration();
+// void PotBrake::saveConfiguration() {
+//     PotBrakeConfiguration *config = (PotBrakeConfiguration *) getConfiguration();
 
-    // we deliberately do not save config via parent class here !
+//     // we deliberately do not save config via parent class here !
 
-    prefsHandler->write("BrakeMin", (uint16_t)config->minimumLevel1);
-    prefsHandler->write("BrakeMax", (uint16_t)config->maximumLevel1);
-    prefsHandler->write("BrakeMaxRegen", config->maximumRegen);
-    prefsHandler->write("BrakeMinRegen", config->minimumRegen);
-    prefsHandler->write("BrakeADC", config->AdcPin1);
-    prefsHandler->saveChecksum();
-}
+//     prefsHandler->write("BrakeMin", (uint16_t)config->minimumLevel1);
+//     prefsHandler->write("BrakeMax", (uint16_t)config->maximumLevel1);
+//     prefsHandler->write("BrakeMaxRegen", config->maximumRegen);
+//     prefsHandler->write("BrakeMinRegen", config->minimumRegen);
+//     prefsHandler->write("BrakeADC", config->AdcPin1);
+//     prefsHandler->saveChecksum();
+// }
 
 PotBrake potBrake;

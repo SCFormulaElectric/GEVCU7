@@ -77,8 +77,8 @@ class ThrottleConfiguration: public DeviceConfiguration {
 public:
     uint16_t positionRegenMaximum, positionRegenMinimum; // throttle position where regen is highest and lowest
     uint16_t positionForwardMotionStart, positionHalfPower; // throttle position where forward motion starts and the mid point of throttle
-    uint8_t maximumRegen; // percentage of max torque allowable for regen at maximum level
-    uint8_t minimumRegen; // percentage of max torque allowable for regen at minimum level
+    // uint8_t maximumRegen; // percentage of max torque allowable for regen at maximum level
+    // uint8_t minimumRegen; // percentage of max torque allowable for regen at minimum level
     uint8_t creep; // percentage of torque used for creep function (imitate creep of automatic transmission, set 0 to disable)
 };
 
@@ -108,7 +108,7 @@ public:
     
     virtual RawSignalData *acquireRawSignal();
     void loadConfiguration();
-    void saveConfiguration();
+   // void saveConfiguration();
 
 protected:
     ThrottleStatus status;
