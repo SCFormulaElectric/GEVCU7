@@ -140,6 +140,9 @@ in JSON instead. This is much easier to work with.
 #include "src/CrashHandler.h"
 #include "localconfig.h"
 
+// See state diagram in the google drive for more info on these states
+enum states { S0, S1, S2 };
+
 // Use Teensy SDIO - SDIO is four bit and direct in hardware - it should be plenty fast
 #define SD_CONFIG  SdioConfig(FIFO_SDIO)
 
@@ -278,6 +281,7 @@ void testGEVCUHardware()
 }
 
 void setup() {
+    uint8_t state = S0; // IDLE
     WDT_timings_t config;
     //GEVCU might loop very rapidly sometimes so windowing mode would be tough. Revisit later
     //config.window = 100; /* in milliseconds, 32ms to 522.232s, must be smaller than timeout */
