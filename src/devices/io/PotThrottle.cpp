@@ -23,7 +23,6 @@
  SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
  */
-
 #include "PotThrottle.h"
 
 /*
@@ -71,10 +70,6 @@ void PotThrottle::setup() {
     cfgEntries.push_back(entry);
     entry = {"T2MX", "Set throttle 2 max value", &config->maximumLevel2, CFG_ENTRY_VAR_TYPE::UINT16, 0, 4096, 0, nullptr};
     cfgEntries.push_back(entry);
-
-    //set digital ports to inputs and pull them up all inputs currently active low
-    //pinMode(THROTTLE_INPUT_BRAKELIGHT, INPUT_PULLUP); //Brake light switch
-
     tickHandler.attach(this, CFG_TICK_INTERVAL_POT_THROTTLE);
 }
 
@@ -91,7 +86,6 @@ void PotThrottle::handleTick() {
  */
 RawSignalData *PotThrottle::acquireRawSignal() {
     PotThrottleConfiguration *config = (PotThrottleConfiguration *) getConfiguration();
-
     rawSignal.input1 = systemIO.getAnalogIn(config->AdcPin1);
     rawSignal.input2 = systemIO.getAnalogIn(config->AdcPin2);
     return &rawSignal;
@@ -104,18 +98,13 @@ RawSignalData *PotThrottle::acquireRawSignal() {
 bool PotThrottle::validateSignal(RawSignalData *rawSignal) {
     PotThrottleConfiguration *config = (PotThrottleConfiguration *) getConfiguration();
     int32_t calcThrottle1, calcThrottle2;
-    
-    calcThrottle1 = normalizeInput(rawSignal->input1, config->minimumLevel1, config->maximumLevel1 );
-
-
-    //Remove this warning message when done, for debugging
-    Logger::warn("Throttle 1 percentage: (%i) | Throttle 2 percentage (%i)", calcThrottle2, calcThrottle1);
+    //maps throttle sensor one from a range of 0 to 1000 where each # is a tenth of a percent
+    calcThrottle1 = normalizeInput(rawSignal->input1, config->minimumLevel1, config->maximumLevel1);
 
     if (config->numberPotMeters == 1 && config->throttleSubType == 2) { // inverted
         calcThrottle1 = 1000 - calcThrottle1;
     }
-
-
+    //if the throttle reading is above 100.0% + the tolerance (15.0%, set in Throttle.h), then throw an error
     if (calcThrottle1 > (1000 + CFG_THROTTLE_TOLERANCE))
     {
         if (status == OK)
@@ -124,12 +113,13 @@ bool PotThrottle::validateSignal(RawSignalData *rawSignal) {
         faultHandler.raiseFault(POTACCELPEDAL, FAULT_THROTTLE_HIGH_A, true);
         return false;
     }
+    //if the throttle reading is above 100.0% but below the tolerance, then set reading to 100.0%
     else
     {
         if (calcThrottle1 > 1000) calcThrottle1 = 1000;
         faultHandler.cancelOngoingFault(POTACCELPEDAL, FAULT_THROTTLE_HIGH_A);
     }
-
+    //if the throttle reading is below 0.0% - tolerance (15.0%), then throw an error
     if (calcThrottle1 < (0 - CFG_THROTTLE_TOLERANCE)) {
         if (status == OK)
             Logger::error(POTACCELPEDAL, "ERR_LOW_T1: throttle 1 value out of range: %i ", calcThrottle1);
@@ -137,80 +127,76 @@ bool PotThrottle::validateSignal(RawSignalData *rawSignal) {
         faultHandler.raiseFault(POTACCELPEDAL, FAULT_THROTTLE_LOW_A, true);
         return false;
     }
+    //if the throttle reading is below 0.0%, but above the tolerance, set the reading to 0.0%
     else
     {
         if (calcThrottle1 < 0) calcThrottle1 = 0;
         faultHandler.cancelOngoingFault(POTACCELPEDAL, FAULT_THROTTLE_LOW_A);
     }
 
-    if (config->numberPotMeters > 1) {
-        calcThrottle2 = normalizeInput(rawSignal->input2, config->minimumLevel2, config->maximumLevel2);
+    calcThrottle2 = normalizeInput(rawSignal->input2, config->minimumLevel2, config->maximumLevel2);
+    //if the throttle reading is above 100.0% + the tolerance (15.0%), then throw an error
 
-        if (calcThrottle2 > (1000 + CFG_THROTTLE_TOLERANCE)) {
-            if (status == OK)
-                Logger::error(POTACCELPEDAL, "ERR_HIGH_T2: throttle 2 value out of range: %i", calcThrottle2);
-            status = ERR_HIGH_T2;
-            faultHandler.raiseFault(POTACCELPEDAL, FAULT_THROTTLE_HIGH_B, true);
-            return false;
-        }
-        else
-        {
-            if (calcThrottle2 > 1000) calcThrottle2 = 1000;
-            faultHandler.cancelOngoingFault(POTACCELPEDAL, FAULT_THROTTLE_HIGH_B);
-        }
-
-        if (calcThrottle2 < (0 - CFG_THROTTLE_TOLERANCE)) {
-            if (status == OK)
-                Logger::error(POTACCELPEDAL, "ERR_LOW_T2: throttle 2 value out of range: %i", calcThrottle2);
-            status = ERR_LOW_T2;
-            faultHandler.cancelOngoingFault(POTACCELPEDAL, FAULT_THROTTLE_LOW_B);
-            return false;
-        }
-        else
-        {
-            if (calcThrottle2 < 0) calcThrottle2 = 0;
-            faultHandler.cancelOngoingFault(POTACCELPEDAL, FAULT_THROTTLE_LOW_B);
-        }
-
-        if (config->throttleSubType == 2) {
-            // inverted throttle 2 means the sum of the two throttles should be 1000
-            if ( abs(1000 - calcThrottle1 - calcThrottle2) > ThrottleMaxErrValue) {
-                if (status == OK)
-                    Logger::error(POTACCELPEDAL, "Sum of throttle 1 (%i) and throttle 2 (%i) exceeds max variance from 1000 (%i)",
-                                  calcThrottle1, calcThrottle2, ThrottleMaxErrValue);
-                status = ERR_MISMATCH;
-                faultHandler.raiseFault(POTACCELPEDAL, FAULT_THROTTLE_MISMATCH_AB, true);
-                return false;
-            }
-            else
-            {
-                faultHandler.cancelOngoingFault(POTACCELPEDAL, FAULT_THROTTLE_MISMATCH_AB);
-            }
-        } else {
-            if ((calcThrottle1 - ThrottleMaxErrValue) > calcThrottle2) { //then throttle1 is too large compared to 2
-                if (status == OK)
-                    Logger::error(POTACCELPEDAL, "throttle 1 too high (%i) compared to 2 (%i)", calcThrottle1, calcThrottle2);
-                status = ERR_MISMATCH;
-                faultHandler.raiseFault(POTACCELPEDAL, FAULT_THROTTLE_MISMATCH_AB, true);
-                return false;
-            }
-            else if ((calcThrottle2 - ThrottleMaxErrValue) > calcThrottle1) { //then throttle2 is too large compared to 1
-                if (status == OK)
-                    Logger::error(POTACCELPEDAL, "throttle 2 too high (%i) compared to 1 (%i)", calcThrottle2, calcThrottle1);
-                status = ERR_MISMATCH;
-                faultHandler.raiseFault(POTACCELPEDAL, FAULT_THROTTLE_MISMATCH_AB, true);
-                return false;
-            }
-            else
-            {
-                faultHandler.cancelOngoingFault(POTACCELPEDAL, FAULT_THROTTLE_MISMATCH_AB);
-            }
-        }
+    
+    if (calcThrottle2 > (1000 + CFG_THROTTLE_TOLERANCE)) {
+        if (status == OK)
+            Logger::error(POTACCELPEDAL, "ERR_HIGH_T2: throttle 2 value out of range: %i", calcThrottle2);
+        status = ERR_HIGH_T2;
+        faultHandler.raiseFault(POTACCELPEDAL, FAULT_THROTTLE_HIGH_B, true);
+        return false;
     }
+    //if the throttle reading is above 100.0% but below the tolerance, then set reading to 100.0%
+    else
+    {
+        if (calcThrottle2 > 1000) calcThrottle2 = 1000;
+        faultHandler.cancelOngoingFault(POTACCELPEDAL, FAULT_THROTTLE_HIGH_B);
+    }
+    //if the throttle reading is below 0.0% - tolerance (15.0%), then throw an error
+    if (calcThrottle2 < (0 - CFG_THROTTLE_TOLERANCE)) {
+        if (status == OK)
+            Logger::error(POTACCELPEDAL, "ERR_LOW_T2: throttle 2 value out of range: %i", calcThrottle2);
+        status = ERR_LOW_T2;
+        faultHandler.cancelOngoingFault(POTACCELPEDAL, FAULT_THROTTLE_LOW_B);
+        return false;
+    }
+    //if the throttle reading is below 0.0%, but above the tolerance, set the reading to 0.0%
+    else
+    {
+        if (calcThrottle2 < 0) calcThrottle2 = 0;
+        faultHandler.cancelOngoingFault(POTACCELPEDAL, FAULT_THROTTLE_LOW_B);
+    }
+
+    Logger::warn("Throttle 1 percentage: (%i) | Throttle 2 percentage (%i)", calcThrottle1, calcThrottle2);
+    //if the throttle readings difference is greater than the ThrottleMaxErrValue (10.0% set by guidelines), then throw an error
+    //throttle 1 sensor is too big
+    if ((calcThrottle1 - ThrottleMaxErrValue) > calcThrottle2) { 
+        if (status == OK)
+            Logger::error(POTACCELPEDAL, "throttle 1 too high (%i) compared to 2 (%i)", calcThrottle1, calcThrottle2);
+        status = ERR_MISMATCH;
+        faultHandler.raiseFault(POTACCELPEDAL, FAULT_THROTTLE_MISMATCH_AB, true);
+        return false;
+    }
+    //throttle 2 sensor is too big
+    else if ((calcThrottle2 - ThrottleMaxErrValue) > calcThrottle1) { //then throttle2 is too large compared to 1
+        if (status == OK)
+            Logger::error(POTACCELPEDAL, "throttle 2 too high (%i) compared to 1 (%i)", calcThrottle2, calcThrottle1);
+        status = ERR_MISMATCH;
+        faultHandler.raiseFault(POTACCELPEDAL, FAULT_THROTTLE_MISMATCH_AB, true);
+        return false;
+    }
+    //throttle readings are good now, so cancel any faults that are happening
+    else
+    {
+        faultHandler.cancelOngoingFault(POTACCELPEDAL, FAULT_THROTTLE_MISMATCH_AB);
+    }
+        
 
     // all checks passed -> throttle is ok
     if (status != OK)
-        if (status != ERR_MISC) Logger::info(POTACCELPEDAL, (char *)Constants::normalOperation);
+        if (status != ERR_MISC)
+        { 
+            Logger::info(POTACCELPEDAL, (char *)Constants::normalOperation);
+        }
     status = OK;
     return true;
 }
@@ -224,14 +210,9 @@ int16_t PotThrottle::calculatePedalPosition(RawSignalData *rawSignal) {
     uint16_t calcThrottle1, calcThrottle2;
 
     calcThrottle1 = normalizeInput(rawSignal->input1, config->minimumLevel1, config->maximumLevel1);
+    calcThrottle2 = normalizeInput(rawSignal->input2, config->minimumLevel2, config->maximumLevel2);
+    return ((calcThrottle1 + calcThrottle2) / 2); //return average percentage between two readings
 
-    if (config->numberPotMeters > 1) {
-        calcThrottle2 = normalizeInput(rawSignal->input2, config->minimumLevel2, config->maximumLevel2);
-        if (config->throttleSubType == 2) // inverted
-            calcThrottle2 = 1000 - calcThrottle2;
-        calcThrottle1 = (calcThrottle1 + calcThrottle2) / 2; // now the average of the two
-    }
-    return calcThrottle1;
 }
 
 /*
@@ -257,59 +238,30 @@ void PotThrottle::loadConfiguration() {
 
     Throttle::loadConfiguration(); // call parent
 
-    //if (prefsHandler->checksumValid()) { //checksum is good, read in the values stored in EEPROM
-        Logger::debug(POTACCELPEDAL, Constants::validChecksum);
-        prefsHandler->read("ThrottleMin1", (uint16_t *)&config->minimumLevel1, 0);
-        //figure out this number --> 3150
-        //3150 milivolts -->  
+ 
+    Logger::debug(POTACCELPEDAL, Constants::validChecksum);
+    //Configuration for our throttle pedal
+    //The input for max and min are in weird units where 1 volt = 818 mystery unit
+    //Example: 5 volts = 4090 mystery unit, so if the max reading is 5 volts, input 4090 to maximumLevel1/maximumLevel2
 
-        //1 volt around 818
-
-        //5 volts = 818 when max is 5000
-        //5 volts = 1000 when max is 4090
-        //910 dif = 18.2% dif
-       
-        prefsHandler->read("ThrottleMax1", (uint16_t *)&config->maximumLevel1, 3708);
-        prefsHandler->read("ThrottleMax2", (uint16_t *)&config->maximumLevel2, 1684);
-        prefsHandler->read("ThrottleMin1", (uint16_t *)&config->minimumLevel1, 598);        
-        prefsHandler->read("ThrottleMin2", (uint16_t *)&config->minimumLevel2, 296);
-        prefsHandler->read("NumThrottles", &config->numberPotMeters, 2);
-        prefsHandler->read("ThrottleType", &config->throttleSubType, 1);
-        prefsHandler->read("ADC1", &config->AdcPin1, 0);
-        prefsHandler->read("ADC2", &config->AdcPin2, 4);
-
-        // ** This is potentially a condition that is only met if you don't have the EEPROM hardware **
-        // If preferences have never been set before, numThrottlePots and throttleSubType
-        // will both be zero.  We really should refuse to operate in this condition and force
-        // calibration, but for now at least allow calibration to work by setting numThrottlePots = 2
-        if (config->numberPotMeters == 0 && config->throttleSubType == 0) {
-            Logger::info(POTACCELPEDAL, "THROTTLE APPEARS TO NEED CALIBRATION/DETECTION - choose 'z' on the serial console menu");
-            config->numberPotMeters = 2;
-        }
-    //}
+    //these values should be changed to match real throttle pedal, not the manual numbers
+    prefsHandler->read("ThrottleMin1", (uint16_t *)&config->minimumLevel1, 598);     //should be voltage sensor 1   
+    prefsHandler->read("ThrottleMax1", (uint16_t *)&config->maximumLevel1, 3708);
+    prefsHandler->read("ThrottleMin2", (uint16_t *)&config->minimumLevel2, 296);      //should be voltage sensor 2, the one with half the voltage reading  
+    prefsHandler->read("ThrottleMax2", (uint16_t *)&config->maximumLevel2, 1684);
+    //We have 2 throttle sensors so input 2
+    prefsHandler->read("NumThrottles", &config->numberPotMeters, 2);
+    //Our sensors are positive linear which is throttleSubType 1
+    prefsHandler->read("ThrottleType", &config->throttleSubType, 1);
+    //Set Analog inputs to their respective pins
+    //For some reason AnalogIn0 is pin 0 and AnalogIn1 is pin 4, found through testing
+    //voltage sensor 1 should be in AnalogIn0
+    //voltage sensor 2 should be in AnalogIn1
+    prefsHandler->read("ADC1", &config->AdcPin1, 0);
+    prefsHandler->read("ADC2", &config->AdcPin2, 4);
     Logger::debug(POTACCELPEDAL, "# of pots: %d       subtype: %d", config->numberPotMeters, config->throttleSubType);
     Logger::debug(POTACCELPEDAL, "T1 MIN: %i MAX: %i      T2 MIN: %i MAX: %i", config->minimumLevel1, config->maximumLevel1, config->minimumLevel2,
                   config->maximumLevel2);
-}
-
-/*
- * Store the current configuration to EEPROM
- */
-void PotThrottle::saveConfiguration() {
-    PotThrottleConfiguration *config = (PotThrottleConfiguration *) getConfiguration();
-
-    Throttle::saveConfiguration(); // call parent
-
-    prefsHandler->write("ThrottleMin1", (uint16_t)config->minimumLevel1);
-    prefsHandler->write("ThrottleMax1", (uint16_t)config->maximumLevel1);
-    prefsHandler->write("ThrottleMin2", (uint16_t)config->minimumLevel2);
-    prefsHandler->write("ThrottleMax2", (uint16_t)config->maximumLevel2);
-    prefsHandler->write("NumThrottles", config->numberPotMeters);
-    prefsHandler->write("ThrottleType", config->throttleSubType);
-    prefsHandler->write("ADC1", config->AdcPin1);
-    prefsHandler->write("ADC2", config->AdcPin2);
-    prefsHandler->saveChecksum();
-    prefsHandler->forceCacheWrite();
 }
 
 String PotThrottle::describeThrottleType()
@@ -319,8 +271,5 @@ String PotThrottle::describeThrottleType()
     if (config->throttleSubType == 2) return String("Inverse Linear");
     return String("Invalid Value!");
 }
-
 //creation of a global variable here causes the driver to automatically register itself without external help
 PotThrottle potThrottle;
-
-
