@@ -106,7 +106,11 @@ bool PotThrottle::validateSignal(RawSignalData *rawSignal) {
     int32_t calcThrottle1, calcThrottle2;
     
     calcThrottle1 = normalizeInput(rawSignal->input1, config->minimumLevel1, config->maximumLevel1 );
-    //Logger::console("Value is %d", calcThrottle1);
+
+
+    //Remove this warning message when done, for debugging
+    Logger::warn("Throttle 1 percentage: (%i) | Throttle 2 percentage (%i)", calcThrottle2, calcThrottle1);
+
     if (config->numberPotMeters == 1 && config->throttleSubType == 2) { // inverted
         calcThrottle1 = 1000 - calcThrottle1;
     }
@@ -265,9 +269,10 @@ void PotThrottle::loadConfiguration() {
         //5 volts = 1000 when max is 4090
         //910 dif = 18.2% dif
        
-        prefsHandler->read("ThrottleMax1", (uint16_t *)&config->maximumLevel1, 4090);
-        prefsHandler->read("ThrottleMin2", (uint16_t *)&config->minimumLevel2, 0);        
-        prefsHandler->read("ThrottleMax2", (uint16_t *)&config->maximumLevel2, 4090);
+        prefsHandler->read("ThrottleMax1", (uint16_t *)&config->maximumLevel1, 3708);
+        prefsHandler->read("ThrottleMax2", (uint16_t *)&config->maximumLevel2, 1684);
+        prefsHandler->read("ThrottleMin1", (uint16_t *)&config->minimumLevel1, 598);        
+        prefsHandler->read("ThrottleMin2", (uint16_t *)&config->minimumLevel2, 296);
         prefsHandler->read("NumThrottles", &config->numberPotMeters, 2);
         prefsHandler->read("ThrottleType", &config->throttleSubType, 1);
         prefsHandler->read("ADC1", &config->AdcPin1, 0);
