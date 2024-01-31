@@ -67,12 +67,12 @@ public:
     DeviceId getId();
     RawSignalData *acquireRawSignal();
 
+    int16_t calculatePedalPosition(RawSignalData *);
     void loadConfiguration();
     void saveConfiguration();
 
 protected:
     bool validateSignal(RawSignalData *);
-    int16_t calculatePedalPosition(RawSignalData *);
     String describeThrottleType();
 
 private:
