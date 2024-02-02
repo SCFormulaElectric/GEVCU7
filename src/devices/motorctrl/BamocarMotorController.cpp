@@ -49,7 +49,7 @@ void BamocarMotorController::handleTick() {
     int percent = throttle.calculatePedalPosition(throttle.acquireRawSignal());
     Logger::warn("this is the percentage%i", percent);
     //rounding to nearest 10th
-    int a = (percent/10)*10;
+    int a = (percent/10);
     int b = a + 10;
     percent = (percent - a > b - percent)? b : a;
     int input = percent*327;
